@@ -8,21 +8,31 @@
 
 import { useAuthProfileReady } from 'deepspace'
 import { APP_NAME } from '../../constants'
+import { useState } from 'react'
 
 export default function HomePage() {
   const { isSignedIn, user } = useAuthProfileReady({ requireUser: true })
+  const [caption, setCaption] = useState('')
 
   return (
     <div className="flex min-h-full flex-col items-center justify-center gap-3 bg-background px-6 text-center text-foreground">
       <h1 className="text-2xl font-semibold">{APP_NAME}</h1>
-      <p className="max-w-md text-sm text-muted-foreground">
-        This is a placeholder page. Replace <code>src/pages/(app)/home.tsx</code>{' '}
-        with the app&apos;s real home, and give the app its own theme in{' '}
-        <code>src/themes.css</code>.
-      </p>
-      {isSignedIn && user && (
-        <p className="text-sm text-muted-foreground">Signed in as {user.name ?? user.email}</p>
-      )}
+      {isSignedIn && (
+  <div className="flex w-full max-w-md flex-col gap-2 text-left">
+    <label htmlFor="caption">Short bio or photo caption</label>
+    <textarea
+      id="caption"
+      value={caption}
+      onChange={(event) => setCaption(event.target.value)}
+      maxLength={500}
+      rows={5}
+      className="rounded-md border border-border bg-background p-3 text-foreground"
+    />
+    <p className="text-sm text-muted-foreground">
+      {caption.length}/500
+    </p>
+  </div>
+)}
     </div>
   )
 }
