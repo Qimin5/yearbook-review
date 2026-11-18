@@ -1,12 +1,44 @@
 import { useState } from 'react'
-import { useAuthProfileReady, useR2Files } from 'deepspace'
+import {
+  useAuthProfileReady,
+  useR2Files,
+  useMutations,
+  useQuery,
+} from 'deepspace'
 import type { R2FileInfo } from 'deepspace'
 import { APP_NAME } from '../../constants'
 
+// Fields sent by the submission form.
+type SubmissionInput = {
+  photoKey: string
+  caption: string
+}
+
+// A stored submission also includes review fields.
+type Submission = SubmissionInput & {
+  status: 'pending' | 'approved' | 'needs_revision'
+  feedback: string
+}
+
 export default function HomePage() {
   const { isSignedIn } = useAuthProfileReady({ requireUser: true })
+
+  // App-scope photo URLs are publicly accessible.
   const { upload, isUploading, list, getUrl } = useR2Files({
     scope: 'app',
+  })
+
+  const { createConfirmed, ready } =
+    useMutations<SubmissionInput>('submissions')
+
+  const {
+    records: submissions,
+    status: submissionsStatus,
+    error: submissionsError,
+  } = useQuery<Submission>('submissions', {
+    orderBy: 'createdAt',
+    orderDir: 'desc',
+    limit: 20,
   })
 
   const [caption, setCaption] = useState('')
@@ -15,12 +47,16 @@ export default function HomePage() {
   const [photoKey, setPhotoKey] = useState('')
   const [uploadMessage, setUploadMessage] = useState('')
 
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [submitMessage, setSubmitMessage] = useState('')
+  const [submittedId, setSubmittedId] = useState('')
+
   const [uploadedFiles, setUploadedFiles] = useState<R2FileInfo[]>([])
   const [isLoadingFiles, setIsLoadingFiles] = useState(false)
   const [filesMessage, setFilesMessage] = useState('')
 
   async function handleUpload() {
-    if (!photo || isUploading || photoKey) return
+    if (!photo || isUploading || photoKey || isSubmitting) return
 
     setUploadMessage('')
 
@@ -36,6 +72,42 @@ export default function HomePage() {
       setUploadMessage('Photo uploaded successfully.')
     } catch {
       setUploadMessage('Upload failed. Please try again.')
+    }
+  }
+
+  async function handleSubmit() {
+    const trimmedCaption = caption.trim()
+
+    if (
+      !ready ||
+      !photoKey ||
+      !trimmedCaption ||
+      isUploading ||
+      isSubmitting ||
+      submittedId
+    ) {
+      return
+    }
+
+    setIsSubmitting(true)
+    setSubmitMessage('')
+
+    try {
+      const id = await createConfirmed({
+        photoKey,
+        caption: trimmedCaption,
+      })
+
+      setSubmittedId(id)
+      setSubmitMessage('Submission saved. Pending review.')
+    } catch (error) {
+      setSubmitMessage(
+        error instanceof Error
+          ? error.message
+          : 'Submission failed. Please try again.'
+      )
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
@@ -72,7 +144,7 @@ export default function HomePage() {
             id="photo"
             type="file"
             accept="image/jpeg,image/png"
-            disabled={isUploading}
+            disabled={isUploading || isSubmitting}
             aria-describedby="photo-help photo-error"
             onChange={(event) => {
               const file = event.target.files?.[0]
@@ -81,6 +153,8 @@ export default function HomePage() {
               setPhotoKey('')
               setPhotoError('')
               setUploadMessage('')
+              setSubmittedId('')
+              setSubmitMessage('')
 
               if (!file) return
 
@@ -113,7 +187,9 @@ export default function HomePage() {
           <button
             type="button"
             onClick={handleUpload}
-            disabled={!photo || isUploading || !!photoKey}
+            disabled={
+              !photo || isUploading || !!photoKey || isSubmitting
+            }
             className="rounded-md bg-primary px-4 py-2 text-primary-foreground disabled:opacity-50"
           >
             {isUploading ? 'Uploading...' : 'Upload photo'}
@@ -128,14 +204,94 @@ export default function HomePage() {
             id="caption"
             value={caption}
             onChange={(event) => setCaption(event.target.value)}
+            disabled={isSubmitting || !!submittedId}
             maxLength={500}
             rows={5}
-            className="rounded-md border border-border bg-background p-3 text-foreground"
+            className="rounded-md border border-border bg-background p-3 text-foreground disabled:opacity-50"
           />
 
           <p className="text-sm text-muted-foreground">
             {caption.length}/500
           </p>
+
+          {!ready && (
+            <p role="status" className="text-sm text-muted-foreground">
+              Connecting to submission storage...
+            </p>
+          )}
+
+          <button
+            type="button"
+            onClick={handleSubmit}
+            disabled={
+              !ready ||
+              !photoKey ||
+              !caption.trim() ||
+              isUploading ||
+              isSubmitting ||
+              !!submittedId
+            }
+            className="rounded-md bg-primary px-4 py-2 text-primary-foreground disabled:opacity-50"
+          >
+            {isSubmitting ? 'Submitting...' : 'Submit for review'}
+          </button>
+
+          <p role="status" className="text-sm text-muted-foreground">
+            {submitMessage}
+          </p>
+
+          {submittedId && (
+            <p className="text-sm text-muted-foreground">
+              Choose another photo to start a new submission.
+            </p>
+          )}
+
+          <section className="mt-6 flex flex-col gap-3 border-t border-border pt-4">
+            <h2 className="text-lg font-semibold">Submissions</h2>
+            <p className="text-sm text-muted-foreground">
+              Latest 20 submissions visible to your account.
+            </p>
+
+            {submissionsStatus === 'loading' && (
+              <p role="status">Loading submissions...</p>
+            )}
+
+            {submissionsStatus === 'error' && (
+              <p role="alert">
+                {submissionsError || 'Could not load submissions.'}
+              </p>
+            )}
+
+            {submissionsStatus === 'ready' &&
+              submissions.length === 0 && (
+                <p>No submissions yet.</p>
+              )}
+
+            {submissionsStatus === 'ready' &&
+              submissions.map((submission) => (
+                <article
+                  key={submission.recordId}
+                  className="flex flex-col gap-2 rounded-md border border-border p-4"
+                >
+                  <img
+                    src={getUrl(submission.data.photoKey)}
+                    alt="Submitted team photo"
+                    loading="lazy"
+                    className="max-h-48 max-w-full rounded-md object-contain"
+                  />
+
+                  <p className="whitespace-pre-wrap break-words">
+                    {submission.data.caption}
+                  </p>
+
+                  <p>Status: {submission.data.status}</p>
+
+                  {submission.data.feedback && (
+                    <p>Editor feedback: {submission.data.feedback}</p>
+                  )}
+                </article>
+              ))}
+          </section>
 
           <section className="mt-6 flex flex-col gap-3 border-t border-border pt-4">
             <h2 className="text-lg font-semibold">Stored photos</h2>
