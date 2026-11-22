@@ -46,7 +46,7 @@ Using the in-app browser on the local production-build preview:
 - Entered feedback, clicked Request changes, and observed the persisted needs-revision state and feedback.
 - Clicked Approve and observed approved status and cleared feedback.
 - Requested a real AI polish, observed the original text unchanged while the suggestion was displayed, then clicked Use suggestion and observed the input change to the suggestion.
-- Inspected the actual layout screenshot.
+- Inspected the actual layout screenshot and the deployed public landing page.
 
 The separate Playwright browser workflow is included but **not claimed as passed**: Chromium process startup was blocked by the execution sandbox. Its replacement verification used the real HTTP/WebSocket runtime, plus browser interactions listed above; it did not mock app auth, records or actions.
 

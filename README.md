@@ -2,7 +2,8 @@
 
 A single-team photo and bio review workspace, inspired by my experience with the Snapshots yearbook club.
 
-**Live app:** https://yearbook-review.app.space  
+**Live app:** https://yearbook-review.app.space
+
 **Repository:** https://github.com/Qimin5/yearbook-review
 
 ## Try the workflow
