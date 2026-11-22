@@ -13,6 +13,10 @@ This file distinguishes checks performed by the applicant from checks performed 
 - Reloaded stored photos from DeepSpace after refresh.
 - Submitted a pending record, loaded its photo/caption/status, then refreshed and confirmed it persisted.
 
+### Additional applicant check on November 22
+
+The applicant supplied screenshots showing an applied AI suggestion and their own pending logo submission, and reported that the review-card image was enlarged/cropped. Codex then changed thumbnails to preserve the full image and added a full-photo dialog; success messages now use success styling.
+
 ## Agent-run automated checks
 
 `npm run validate`: TypeScript passed and **7 unit tests passed**. The AI tests mock only the external integration boundary: successful text-only payload, provider refusal, thrown network error, oversized suggestion. Existing prerender tests also pass.
@@ -56,5 +60,5 @@ The separate Playwright browser workflow is included but **not claimed as passed
 - Review uses the built-in admin role. A real organization should separate editorial and administrative powers.
 - AI's fact preservation is an instruction and a human-review responsibility, not a guaranteed property.
 - No approved-content publishing website, multi-team support, invitations, durable AI usage limiting or orphan-upload cleanup.
-- Applicant has not yet personally re-tested the agent-completed final features.
+- Applicant has personally tried the final AI/submission UI, but has not yet completed their own cross-account review/permission test.
 - The careers task-page submission must still be made by the applicant; deployment is not the same as submitting the application task.

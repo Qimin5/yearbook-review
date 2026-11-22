@@ -36,7 +36,10 @@ export default function HomePage() {
   const [isPolishing, setIsPolishing] = useState(false)
   const [suggestion, setSuggestion] = useState('')
   const [suggestionSource, setSuggestionSource] = useState('')
-  const [aiMessage, setAiMessage] = useState('')
+  const [aiMessage, setAiMessage] = useState<{
+    kind: 'success' | 'error'
+    text: string
+  } | null>(null)
   const [revisingId, setRevisingId] = useState('')
   const requestId = useRef(crypto.randomUUID())
   const inputRef = useRef<HTMLInputElement>(null)
@@ -52,7 +55,7 @@ export default function HomePage() {
     setPhotoKey('')
     setRevisingId('')
     setSuggestion('')
-    setAiMessage('')
+    setAiMessage(null)
     setFormError('')
     requestId.current = crypto.randomUUID()
     if (inputRef.current) inputRef.current.value = ''
@@ -109,7 +112,7 @@ export default function HomePage() {
     if (isPolishing || !caption.trim()) return
     const source = caption
     setIsPolishing(true)
-    setAiMessage('')
+    setAiMessage(null)
     setSuggestion('')
     try {
       const result = await callAction<{ suggestion: string }>('polish', {
@@ -118,11 +121,13 @@ export default function HomePage() {
       setSuggestion(result.suggestion)
       setSuggestionSource(source)
     } catch (error) {
-      setAiMessage(
-        error instanceof Error
-          ? error.message
-          : 'AI is unavailable. You can submit your original text.',
-      )
+      setAiMessage({
+        kind: 'error',
+        text:
+          error instanceof Error
+            ? error.message
+            : 'AI is unavailable. You can submit your original text.',
+      })
     } finally {
       setIsPolishing(false)
     }
@@ -248,7 +253,7 @@ export default function HomePage() {
                   onChange={(e) => {
                     setCaption(e.target.value)
                     setSuggestion('')
-                    setAiMessage('')
+                    setAiMessage(null)
                   }}
                   maxLength={500}
                   rows={5}
@@ -272,8 +277,15 @@ export default function HomePage() {
                   choosing to use a suggestion.
                 </p>
                 {aiMessage && (
-                  <p className="error-message" role="alert">
-                    {aiMessage}
+                  <p
+                    className={
+                      aiMessage.kind === 'error'
+                        ? 'error-message'
+                        : 'success-message'
+                    }
+                    role={aiMessage.kind === 'error' ? 'alert' : 'status'}
+                  >
+                    {aiMessage.text}
                   </p>
                 )}
                 {suggestion && (
@@ -288,9 +300,10 @@ export default function HomePage() {
                         onClick={() => {
                           setCaption(suggestion)
                           setSuggestion('')
-                          setAiMessage(
-                            'Suggestion applied. You can still edit it.',
-                          )
+                          setAiMessage({
+                            kind: 'success',
+                            text: 'Suggestion applied. You can still edit it.',
+                          })
                         }}
                       >
                         Use suggestion
@@ -425,7 +438,7 @@ export default function HomePage() {
                         )
                         setFormError('')
                         setSuggestion('')
-                        setAiMessage('')
+                        setAiMessage(null)
                         if (inputRef.current) inputRef.current.value = ''
                         formRef.current?.scrollIntoView({
                           behavior: 'smooth',

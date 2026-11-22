@@ -10,7 +10,7 @@ A single-team photo and bio review workspace, inspired by my experience with the
 
 1. Open the workspace and sign in with DeepSpace. New users are contributors; the app owner is an editor.
 2. Upload a publicly shareable JPEG/PNG, up to 5 MB, and write a short bio/caption (1–500 characters).
-3. Optionally click **Suggest a polish**. Review the suggestion, choose **Use suggestion** or **Keep original**, and edit as needed. AI receives only the source text.
+3. Click a submission photo to view it in full without cropping; the original file is unchanged. Optionally click **Suggest a polish**. Review the suggestion, choose **Use suggestion** or **Keep original**, and edit as needed. AI receives only the source text.
 4. Click **Submit for review**. The new entry appears as **Pending review**.
 5. In another account/browser session, an editor sees the review queue. **Approve**, or enter feedback and choose **Request changes**.
 6. Keep the contributor page open: status and feedback update without refreshing. A contributor can revise their own returned entry and resubmit it.
@@ -99,4 +99,4 @@ This version serves one team and shows at most 100 visible entries. Editor maps 
 
 ## Authorship and assistance
 
-I chose the Snapshots-inspired workflow. During the guided phase I ran setup/login/deploy/Git commands, changed the landing title, created and connected the submission schema, edited the caption/photo form, changed its label to English, and personally checked login, typing, file-size rejection, photo upload/readback, and persistence after refresh. Codex supplied example code, explanations and debugging guidance. Near the deadline I delegated the remaining implementation and verification to Codex: server-enforced review/revision, realtime workflow checks, optional AI polishing, interface cleanup, automated tests and documentation. Those later checks are agent-run, not checks I personally performed.
+I chose the Snapshots-inspired workflow. During the guided phase I ran setup/login/deploy/Git commands, changed the landing title, created and connected the submission schema, edited the caption/photo form, changed its label to English, and personally checked login, typing, file-size rejection, photo upload/readback, and persistence after refresh. Codex supplied example code, explanations and debugging guidance. Near the deadline I delegated the remaining implementation and verification to Codex: server-enforced review/revision, realtime workflow checks, optional AI polishing, interface cleanup, automated tests and documentation. Those automated checks are agent-run. During my final manual testing I also applied an AI suggestion, submitted a logo entry, and reported a cropped-image display problem, which Codex corrected. I have not yet personally completed the final cross-account permission tests.

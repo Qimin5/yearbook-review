@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { Check, MessageSquare, Pencil } from 'lucide-react'
+import { useRef, useState } from 'react'
+import { Check, MessageSquare, Pencil, X, Expand } from 'lucide-react'
 import { callAction } from '../lib/actions'
 import { STATUS_LABELS, type Submission } from '../lib/submissions'
 
@@ -22,6 +22,7 @@ export default function SubmissionCard({
   canRevise: boolean
   onRevise: () => void
 }) {
+  const photoDialog = useRef<HTMLDialogElement>(null)
   const [feedback, setFeedback] = useState('')
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
@@ -56,11 +57,56 @@ export default function SubmissionCard({
       data-record-id={id}
     >
       <div className="submission-photo">
-        <img
-          src={imageUrl}
-          alt={`Team photo submitted by ${author}`}
-          loading="lazy"
-        />
+        <button
+          type="button"
+          className="photo-open-button"
+          aria-label={`View full photo submitted by ${author}`}
+          onClick={() => photoDialog.current?.showModal()}
+        >
+          <img
+            src={imageUrl}
+            alt={`Team photo submitted by ${author}`}
+            loading="lazy"
+          />
+          <span className="photo-open-label">
+            <Expand size={14} /> View full photo
+          </span>
+        </button>
+        <dialog
+          ref={photoDialog}
+          className="photo-dialog"
+          aria-label={`Full photo submitted by ${author}`}
+          onClick={(event) => {
+            if (event.target === event.currentTarget)
+              photoDialog.current?.close()
+          }}
+        >
+          <div className="photo-dialog-content">
+            <div className="photo-dialog-heading">
+              <strong>Photo submitted by {author}</strong>
+              <button
+                type="button"
+                className="secondary-button"
+                aria-label="Close full photo"
+                onClick={() => photoDialog.current?.close()}
+              >
+                <X size={18} /> Close
+              </button>
+            </div>
+            <img
+              src={imageUrl}
+              alt={`Full team photo submitted by ${author}`}
+            />
+            <a
+              href={imageUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="secondary-button"
+            >
+              Open original image
+            </a>
+          </div>
+        </dialog>
       </div>
       <div className="submission-body">
         <div className="card-heading">
