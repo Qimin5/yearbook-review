@@ -1,341 +1,453 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import {
   useAuthProfileReady,
   useR2Files,
-  useMutations,
   useQuery,
+  useRecordContext,
+  useUserLookup,
 } from 'deepspace'
-import type { R2FileInfo } from 'deepspace'
-import { APP_NAME } from '../../constants'
-
-// Fields sent by the submission form.
-type SubmissionInput = {
-  photoKey: string
-  caption: string
-}
-
-// A stored submission also includes review fields.
-type Submission = SubmissionInput & {
-  status: 'pending' | 'approved' | 'needs_revision'
-  feedback: string
-}
+import { Camera, Check, ImagePlus, Sparkles, X } from 'lucide-react'
+import { callAction } from '../../lib/actions'
+import {
+  STATUS_LABELS,
+  type Submission,
+  type ReviewStatus,
+} from '../../lib/submissions'
+import SubmissionCard from '../../components/SubmissionCard'
 
 export default function HomePage() {
-  const { isSignedIn } = useAuthProfileReady({ requireUser: true })
-
-  // App-scope photo URLs are publicly accessible.
-  const { upload, isUploading, list, getUrl } = useR2Files({
-    scope: 'app',
-  })
-
-  const { createConfirmed, ready } =
-    useMutations<SubmissionInput>('submissions')
-
-  const {
-    records: submissions,
-    status: submissionsStatus,
-    error: submissionsError,
-  } = useQuery<Submission>('submissions', {
+  const { isSignedIn, user } = useAuthProfileReady({ requireUser: true })
+  const { upload, isUploading, getUrl } = useR2Files({ scope: 'app' })
+  const { records, status, error } = useQuery<Submission>('submissions', {
     orderBy: 'createdAt',
     orderDir: 'desc',
-    limit: 20,
+    limit: 100,
   })
-
+  const { ready: roomReady } = useRecordContext()
+  const { getName } = useUserLookup()
+  const isEditor = user?.role === 'admin'
+  const [filter, setFilter] = useState<ReviewStatus | 'all'>('all')
   const [caption, setCaption] = useState('')
   const [photo, setPhoto] = useState<File | null>(null)
-  const [photoError, setPhotoError] = useState('')
   const [photoKey, setPhotoKey] = useState('')
-  const [uploadMessage, setUploadMessage] = useState('')
-
+  const [message, setMessage] = useState('')
+  const [formError, setFormError] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [submitMessage, setSubmitMessage] = useState('')
-  const [submittedId, setSubmittedId] = useState('')
+  const [isPolishing, setIsPolishing] = useState(false)
+  const [suggestion, setSuggestion] = useState('')
+  const [suggestionSource, setSuggestionSource] = useState('')
+  const [aiMessage, setAiMessage] = useState('')
+  const [revisingId, setRevisingId] = useState('')
+  const requestId = useRef(crypto.randomUUID())
+  const inputRef = useRef<HTMLInputElement>(null)
+  const formRef = useRef<HTMLFormElement>(null)
+  const busy = isUploading || isSubmitting
+  const visible = records.filter(
+    (record) => filter === 'all' || record.data.status === filter,
+  )
 
-  const [uploadedFiles, setUploadedFiles] = useState<R2FileInfo[]>([])
-  const [isLoadingFiles, setIsLoadingFiles] = useState(false)
-  const [filesMessage, setFilesMessage] = useState('')
+  function resetForm() {
+    setCaption('')
+    setPhoto(null)
+    setPhotoKey('')
+    setRevisingId('')
+    setSuggestion('')
+    setAiMessage('')
+    setFormError('')
+    requestId.current = crypto.randomUUID()
+    if (inputRef.current) inputRef.current.value = ''
+  }
 
-  async function handleUpload() {
-    if (!photo || isUploading || photoKey || isSubmitting) return
-
-    setUploadMessage('')
-
+  async function uploadPhoto() {
+    if (!photo || busy) return
+    setFormError('')
+    setMessage('')
     try {
       const result = await upload(photo, photo.name)
-
-      if (!result.success || !result.key) {
-        setUploadMessage(result.error || 'Upload failed. Please try again.')
-        return
-      }
-
+      if (!result.success || !result.key)
+        throw new Error(result.error || 'Upload failed. Please try again.')
       setPhotoKey(result.key)
-      setUploadMessage('Photo uploaded successfully.')
-    } catch {
-      setUploadMessage('Upload failed. Please try again.')
+      setMessage('Photo uploaded. Add your caption, then submit for review.')
+    } catch (error) {
+      setFormError(
+        error instanceof Error
+          ? error.message
+          : 'Upload failed. Please try again.',
+      )
     }
   }
 
-  async function handleSubmit() {
-    const trimmedCaption = caption.trim()
-
-    if (
-      !ready ||
-      !photoKey ||
-      !trimmedCaption ||
-      isUploading ||
-      isSubmitting ||
-      submittedId
-    ) {
-      return
-    }
-
+  async function submit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (busy || !photoKey || !caption.trim()) return
     setIsSubmitting(true)
-    setSubmitMessage('')
-
+    setFormError('')
+    setMessage('')
     try {
-      const id = await createConfirmed({
+      await callAction(revisingId ? 'revise' : 'submit', {
         photoKey,
-        caption: trimmedCaption,
+        caption: caption.trim(),
+        requestId: requestId.current,
+        recordId: revisingId,
       })
-
-      setSubmittedId(id)
-      setSubmitMessage('Submission saved. Pending review.')
+      resetForm()
+      setMessage(
+        'Submission saved. Pending review. You can follow its status below.',
+      )
     } catch (error) {
-      setSubmitMessage(
+      setFormError(
         error instanceof Error
           ? error.message
-          : 'Submission failed. Please try again.'
+          : 'Submission failed. Your draft is still here.',
       )
     } finally {
       setIsSubmitting(false)
     }
   }
 
-  async function handleCheckFiles() {
-    if (isLoadingFiles) return
-
-    setIsLoadingFiles(true)
-    setFilesMessage('')
-
+  async function polish() {
+    if (isPolishing || !caption.trim()) return
+    const source = caption
+    setIsPolishing(true)
+    setAiMessage('')
+    setSuggestion('')
     try {
-      const files = await list()
-      setUploadedFiles(files)
-      setFilesMessage(`Found ${files.length} stored files.`)
-    } catch {
-      setUploadedFiles([])
-      setFilesMessage('Could not load stored files. Please try again.')
+      const result = await callAction<{ suggestion: string }>('polish', {
+        caption: source,
+      })
+      setSuggestion(result.suggestion)
+      setSuggestionSource(source)
+    } catch (error) {
+      setAiMessage(
+        error instanceof Error
+          ? error.message
+          : 'AI is unavailable. You can submit your original text.',
+      )
     } finally {
-      setIsLoadingFiles(false)
+      setIsPolishing(false)
     }
   }
 
   return (
-    <div className="flex min-h-full flex-col items-center justify-center gap-3 bg-background px-6 py-10 text-center text-foreground">
-      <h1 className="text-2xl font-semibold">{APP_NAME}</h1>
-
-      {isSignedIn ? (
-        <div className="flex w-full max-w-md flex-col gap-2 text-left">
-          <label htmlFor="photo">Team photo</label>
-          <p id="photo-help" className="text-sm text-muted-foreground">
-            JPEG or PNG, up to 5 MB. Use photos you can share publicly.
+    <div className="workspace">
+      <header className="workspace-heading">
+        <div>
+          <p className="eyebrow">SNAPSHOTS / TEAM WORKSPACE</p>
+          <h1>A team worth remembering.</h1>
+          <p className="intro">
+            One place for team photos, thoughtful bios, and a little editorial
+            care.
           </p>
-
-          <input
-            id="photo"
-            type="file"
-            accept="image/jpeg,image/png"
-            disabled={isUploading || isSubmitting}
-            aria-describedby="photo-help photo-error"
-            onChange={(event) => {
-              const file = event.target.files?.[0]
-
-              setPhoto(null)
-              setPhotoKey('')
-              setPhotoError('')
-              setUploadMessage('')
-              setSubmittedId('')
-              setSubmitMessage('')
-
-              if (!file) return
-
-              if (!['image/jpeg', 'image/png'].includes(file.type)) {
-                setPhotoError('Please choose a JPEG or PNG image.')
-                event.target.value = ''
-                return
-              }
-
-              if (file.size > 5 * 1024 * 1024) {
-                setPhotoError('Please choose an image no larger than 5 MB.')
-                event.target.value = ''
-                return
-              }
-
-              setPhoto(file)
-            }}
-          />
-
-          {photo && (
-            <p className="text-sm text-muted-foreground">
-              Selected: {photo.name}
-            </p>
-          )}
-
-          <p id="photo-error" role="alert" className="text-sm text-red-500">
-            {photoError}
+        </div>
+        {isSignedIn && (
+          <div className="workspace-meta">
+            <span className="role-chip">
+              {isEditor ? 'Editor workspace' : 'Contributor workspace'}
+            </span>
+            <span className="sync-label">
+              {roomReady
+                ? 'Live updates connected'
+                : 'Reconnecting to live updates…'}
+            </span>
+          </div>
+        )}
+      </header>
+      {!isSignedIn ? (
+        <div className="signed-out-panel">
+          <Camera size={40} />
+          <h2>Your team starts here.</h2>
+          <p>
+            Use Sign in above to submit a photo and a short introduction.
+            Editors review submissions before any future publication.
           </p>
-
-          <button
-            type="button"
-            onClick={handleUpload}
-            disabled={
-              !photo || isUploading || !!photoKey || isSubmitting
-            }
-            className="rounded-md bg-primary px-4 py-2 text-primary-foreground disabled:opacity-50"
-          >
-            {isUploading ? 'Uploading...' : 'Upload photo'}
-          </button>
-
-          <p role="status" className="text-sm text-muted-foreground">
-            {uploadMessage}
-          </p>
-
-          <label htmlFor="caption">Short bio or photo caption</label>
-          <textarea
-            id="caption"
-            value={caption}
-            onChange={(event) => setCaption(event.target.value)}
-            disabled={isSubmitting || !!submittedId}
-            maxLength={500}
-            rows={5}
-            className="rounded-md border border-border bg-background p-3 text-foreground disabled:opacity-50"
-          />
-
-          <p className="text-sm text-muted-foreground">
-            {caption.length}/500
-          </p>
-
-          {!ready && (
-            <p role="status" className="text-sm text-muted-foreground">
-              Connecting to submission storage...
-            </p>
-          )}
-
-          <button
-            type="button"
-            onClick={handleSubmit}
-            disabled={
-              !ready ||
-              !photoKey ||
-              !caption.trim() ||
-              isUploading ||
-              isSubmitting ||
-              !!submittedId
-            }
-            className="rounded-md bg-primary px-4 py-2 text-primary-foreground disabled:opacity-50"
-          >
-            {isSubmitting ? 'Submitting...' : 'Submit for review'}
-          </button>
-
-          <p role="status" className="text-sm text-muted-foreground">
-            {submitMessage}
-          </p>
-
-          {submittedId && (
-            <p className="text-sm text-muted-foreground">
-              Choose another photo to start a new submission.
-            </p>
-          )}
-
-          <section className="mt-6 flex flex-col gap-3 border-t border-border pt-4">
-            <h2 className="text-lg font-semibold">Submissions</h2>
-            <p className="text-sm text-muted-foreground">
-              Latest 20 submissions visible to your account.
-            </p>
-
-            {submissionsStatus === 'loading' && (
-              <p role="status">Loading submissions...</p>
-            )}
-
-            {submissionsStatus === 'error' && (
-              <p role="alert">
-                {submissionsError || 'Could not load submissions.'}
-              </p>
-            )}
-
-            {submissionsStatus === 'ready' &&
-              submissions.length === 0 && (
-                <p>No submissions yet.</p>
-              )}
-
-            {submissionsStatus === 'ready' &&
-              submissions.map((submission) => (
-                <article
-                  key={submission.recordId}
-                  className="flex flex-col gap-2 rounded-md border border-border p-4"
-                >
-                  <img
-                    src={getUrl(submission.data.photoKey)}
-                    alt="Submitted team photo"
-                    loading="lazy"
-                    className="max-h-48 max-w-full rounded-md object-contain"
-                  />
-
-                  <p className="whitespace-pre-wrap break-words">
-                    {submission.data.caption}
-                  </p>
-
-                  <p>Status: {submission.data.status}</p>
-
-                  {submission.data.feedback && (
-                    <p>Editor feedback: {submission.data.feedback}</p>
-                  )}
-                </article>
-              ))}
-          </section>
-
-          <section className="mt-6 flex flex-col gap-3 border-t border-border pt-4">
-            <h2 className="text-lg font-semibold">Stored photos</h2>
-            <p className="text-sm text-muted-foreground">
-              Demo check: these are uploaded files, not submitted entries.
-              App-scope photo URLs are publicly accessible.
-            </p>
-
-            <button
-              type="button"
-              onClick={handleCheckFiles}
-              disabled={isLoadingFiles}
-              className="rounded-md border border-border px-4 py-2 disabled:opacity-50"
-            >
-              {isLoadingFiles ? 'Loading...' : 'Check stored photos'}
-            </button>
-
-            <p role="status" className="text-sm text-muted-foreground">
-              {filesMessage}
-            </p>
-
-            {uploadedFiles.map((file) => (
-              <div
-                key={file.key}
-                className="rounded-md border border-border p-3"
-              >
-                <p className="break-all text-sm">
-                  {file.originalName ?? file.key}
-                </p>
-                <img
-                  src={getUrl(file)}
-                  alt={file.originalName ?? 'Uploaded team photo'}
-                  loading="lazy"
-                  className="mt-2 max-h-48 max-w-full rounded-md object-contain"
-                />
-              </div>
-            ))}
-          </section>
         </div>
       ) : (
-        <p className="text-sm text-muted-foreground">
-          Sign in to submit your team photo and bio.
-        </p>
+        <>
+          <div className="workspace-grid">
+            <aside className="compose-panel">
+              <div className="panel-title">
+                <ImagePlus size={21} />
+                <h2>
+                  {revisingId ? 'Revise your submission' : 'Add your snapshot'}
+                </h2>
+              </div>
+              <p className="muted">
+                Share a photo and a few words about yourself or your team.
+              </p>
+              <form ref={formRef} onSubmit={submit} className="submission-form">
+                <label htmlFor="photo">Team photo</label>
+                <div className="photo-picker">
+                  {photoKey ? (
+                    <img
+                      className="upload-preview"
+                      src={getUrl(photoKey)}
+                      alt="Your uploaded team photo"
+                    />
+                  ) : (
+                    <Camera size={30} />
+                  )}
+                  <input
+                    ref={inputRef}
+                    id="photo"
+                    type="file"
+                    accept="image/jpeg,image/png"
+                    disabled={busy}
+                    aria-describedby="photo-help"
+                    onChange={(event) => {
+                      const file = event.target.files?.[0]
+                      setPhoto(null)
+                      setPhotoKey('')
+                      setMessage('')
+                      setFormError('')
+                      if (!file) return
+                      if (!['image/jpeg', 'image/png'].includes(file.type)) {
+                        setFormError('Please choose a JPEG or PNG image.')
+                        event.target.value = ''
+                        return
+                      }
+                      if (file.size > 5 * 1024 * 1024) {
+                        setFormError(
+                          'Please choose an image no larger than 5 MB.',
+                        )
+                        event.target.value = ''
+                        return
+                      }
+                      setPhoto(file)
+                    }}
+                  />
+                  <p id="photo-help">JPEG or PNG · up to 5 MB</p>
+                </div>
+                <p className="privacy-note">
+                  Demo photos are publicly accessible by URL. Use fictional
+                  members and images you can share publicly. Submission text is
+                  restricted to its contributor and editors.
+                </p>
+                <button
+                  className="secondary-button full-width"
+                  type="button"
+                  onClick={uploadPhoto}
+                  disabled={!photo || busy || !!photoKey}
+                >
+                  {photoKey ? (
+                    <>
+                      <Check size={16} /> Photo uploaded
+                    </>
+                  ) : isUploading ? (
+                    'Uploading photo…'
+                  ) : (
+                    'Upload photo'
+                  )}
+                </button>
+                <div className="label-row">
+                  <label htmlFor="caption">Short bio or photo caption</label>
+                  <span>{caption.length}/500</span>
+                </div>
+                <textarea
+                  id="caption"
+                  value={caption}
+                  onChange={(e) => {
+                    setCaption(e.target.value)
+                    setSuggestion('')
+                    setAiMessage('')
+                  }}
+                  maxLength={500}
+                  rows={5}
+                  disabled={busy}
+                  placeholder="A few words about you, your role, or the moment in this photo."
+                  required
+                />
+                <button
+                  className="polish-button"
+                  type="button"
+                  onClick={polish}
+                  disabled={!caption.trim() || isPolishing || busy}
+                >
+                  <Sparkles size={16} />
+                  {isPolishing
+                    ? 'Working on a suggestion…'
+                    : 'Suggest a polish'}
+                </button>
+                <p className="privacy-note">
+                  Optional. Only your text goes to AI. Check the facts before
+                  choosing to use a suggestion.
+                </p>
+                {aiMessage && (
+                  <p className="error-message" role="alert">
+                    {aiMessage}
+                  </p>
+                )}
+                {suggestion && (
+                  <div className="suggestion-panel">
+                    <strong>Suggested wording</strong>
+                    <p>{suggestion}</p>
+                    <div className="button-row">
+                      <button
+                        type="button"
+                        className="secondary-button"
+                        disabled={busy || caption !== suggestionSource}
+                        onClick={() => {
+                          setCaption(suggestion)
+                          setSuggestion('')
+                          setAiMessage(
+                            'Suggestion applied. You can still edit it.',
+                          )
+                        }}
+                      >
+                        Use suggestion
+                      </button>
+                      <button
+                        type="button"
+                        className="text-button"
+                        onClick={() => setSuggestion('')}
+                      >
+                        Keep original
+                      </button>
+                    </div>
+                  </div>
+                )}
+                <button
+                  className="primary-button full-width"
+                  type="submit"
+                  disabled={
+                    !photoKey || !caption.trim() || busy || status !== 'ready'
+                  }
+                >
+                  {isSubmitting
+                    ? 'Saving submission…'
+                    : revisingId
+                      ? 'Resubmit for review'
+                      : 'Submit for review'}
+                </button>
+                {revisingId && (
+                  <button
+                    type="button"
+                    className="text-button"
+                    disabled={busy}
+                    onClick={() => {
+                      resetForm()
+                      setMessage('Revision cancelled.')
+                    }}
+                  >
+                    <X size={15} /> Cancel revision
+                  </button>
+                )}
+                {formError && (
+                  <p className="error-message" role="alert">
+                    {formError}
+                  </p>
+                )}
+                <p className="inline-message" role="status">
+                  {message}
+                </p>
+              </form>
+            </aside>
+            <section className="queue-panel" aria-label="Submission list">
+              <div className="queue-heading">
+                <div>
+                  <p className="eyebrow">
+                    {isEditor ? 'THE EDITORIAL DESK' : 'YOUR CONTRIBUTIONS'}
+                  </p>
+                  <h2>{isEditor ? 'Review queue' : 'Your submissions'}</h2>
+                </div>
+                <span className="entry-count">{records.length} entries</span>
+              </div>
+              <p className="muted">
+                {isEditor
+                  ? 'Read each story. Approve it, or send a helpful note back.'
+                  : 'Your review status and editor feedback update here automatically.'}
+              </p>
+              <div
+                className="filter-tabs"
+                role="group"
+                aria-label="Filter submissions"
+              >
+                {(
+                  ['all', 'pending', 'approved', 'needs_revision'] as const
+                ).map((value) => (
+                  <button
+                    key={value}
+                    className={filter === value ? 'active' : ''}
+                    aria-pressed={filter === value}
+                    onClick={() => setFilter(value)}
+                  >
+                    {value === 'all' ? 'All' : STATUS_LABELS[value]}
+                  </button>
+                ))}
+              </div>
+              {status === 'loading' && (
+                <p role="status" className="empty-state">
+                  Loading submissions…
+                </p>
+              )}
+              {status === 'error' && (
+                <p role="alert" className="error-message">
+                  {error ||
+                    'Could not load submissions. Please reload to reconnect.'}
+                </p>
+              )}
+              {status === 'ready' && visible.length === 0 && (
+                <div className="empty-state">
+                  <Camera size={32} />
+                  <h3>
+                    {filter === 'all'
+                      ? 'A fresh page for your team.'
+                      : 'No entries in this view.'}
+                  </h3>
+                  <p>
+                    {filter === 'all'
+                      ? 'Upload a photo and introduce yourself to get started.'
+                      : 'Try another filter to see more submissions.'}
+                  </p>
+                </div>
+              )}
+              <div className="submission-list">
+                {status === 'ready' &&
+                  visible.map((record) => (
+                    <SubmissionCard
+                      key={record.recordId}
+                      id={record.recordId}
+                      data={record.data}
+                      author={getName(record.createdBy) || 'Team member'}
+                      createdAt={record.createdAt}
+                      imageUrl={getUrl(record.data.photoKey)}
+                      isEditor={isEditor}
+                      canRevise={
+                        record.createdBy === user?.id &&
+                        record.data.status === 'needs_revision'
+                      }
+                      onRevise={() => {
+                        setRevisingId(record.recordId)
+                        setCaption(record.data.caption)
+                        setPhoto(null)
+                        setPhotoKey(record.data.photoKey)
+                        setMessage(
+                          'Update your text or upload a replacement photo, then resubmit.',
+                        )
+                        setFormError('')
+                        setSuggestion('')
+                        setAiMessage('')
+                        if (inputRef.current) inputRef.current.value = ''
+                        formRef.current?.scrollIntoView({
+                          behavior: 'smooth',
+                          block: 'start',
+                        })
+                      }}
+                    />
+                  ))}
+              </div>
+              {records.length >= 100 && (
+                <p className="privacy-note">
+                  Showing the latest 100 visible submissions.
+                </p>
+              )}
+            </section>
+          </div>
+        </>
       )}
+      <footer className="workspace-footer">
+        <span>Snapshots / Yearbook Review</span>
+        <span>A single-team demo. Approval does not publish a photo.</span>
+      </footer>
     </div>
   )
 }

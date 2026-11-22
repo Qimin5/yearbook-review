@@ -4,6 +4,18 @@ export const submissionsSchema: CollectionSchema = {
   name: 'submissions',
   columns: [
     {
+      name: 'reviewedBy',
+      storage: 'text',
+      interpretation: 'plain',
+      default: '',
+    },
+    {
+      name: 'reviewedAt',
+      storage: 'text',
+      interpretation: 'plain',
+      default: '',
+    },
+    {
       name: 'photoKey',
       storage: 'text',
       interpretation: 'plain',
@@ -36,11 +48,10 @@ export const submissionsSchema: CollectionSchema = {
     viewer: { read: false, create: false, update: false, delete: false },
     member: {
       read: 'own',
-      create: true,
+      create: false,
       update: false,
       delete: false,
-      writableFields: ['photoKey', 'caption'],
     },
-    admin: { read: true, create: true, update: true, delete: false },
+    admin: { read: true, create: false, update: false, delete: false },
   },
 }

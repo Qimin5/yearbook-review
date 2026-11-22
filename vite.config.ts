@@ -4,7 +4,7 @@ import react from '@vitejs/plugin-react'
 import generouted from '@generouted/react-router/plugin'
 import { cloudflare } from '@cloudflare/vite-plugin'
 import checker from 'vite-plugin-checker'
-import { deepspaceBuild } from 'deepspace/build'
+import { deepspaceBuild, testState } from 'deepspace/build'
 import { prerender } from './prerender.ts'
 
 const appDir = fileURLToPath(new URL('.', import.meta.url))
@@ -19,6 +19,7 @@ export default defineConfig({
     // available. Inspector debugging is optional, so disable that probe in
     // the generated app and keep local dev/test startup deterministic.
     cloudflare({
+      ...testState(),
       inspectorPort: false,
     }),
     // The app id `define`, the preview-secret cleanup, and the client dedupe
