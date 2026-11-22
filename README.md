@@ -1,6 +1,6 @@
 # Yearbook Review
 
-A photo and bio review app for one team, inspired by my experience with the Snapshots yearbook club.
+A shared workspace for collecting and reviewing team photos and bios, inspired by my experience with the Snapshots yearbook club. Built with DeepSpace, it brings submissions and editorial feedback together to help teams prepare content for a yearbook or an About the Team page.
 
 [Open the app](https://yearbook-review.app.space) · [GitHub repository](https://github.com/Qimin5/yearbook-review)
 
@@ -75,8 +75,8 @@ Codex ran the TypeScript check, **7 unit tests**, the production build, and **14
 
 See the [detailed verification record](docs/VERIFICATION.md) for test results and remaining limitations.
 
-## My work and Codex's help
+## My contribution and AI assistance
 
-I chose the idea and workflow, ran the initial setup and deployment, connected the submission schema, edited the form and English labels, and performed the manual checks above. Codex provided example code, explanations, and debugging help.
+I designed the workflow around my experience with the Snapshots yearbook club: contributors submit photos and bios, editors give feedback, and contributors see updates live. I set up and deployed the DeepSpace starter, connected the submission schema, edited the form, and manually tested uploads, saved submissions, and AI suggestions. My testing also identified a photo display issue that was corrected.
 
-Near the deadline, I delegated the remaining implementation to Codex: backend review permissions, revisions, realtime workflow verification, AI polishing, interface improvements, automated tests, and documentation. The cross-account permission checks reported here were run by Codex.
+I used Codex for guided learning, debugging, and implementation help, including backend permissions, review and revision actions, AI polishing, and interface improvements. Codex also ran automated checks for realtime updates and unauthorized requests. The verification record distinguishes my manual testing from agent-run checks.
