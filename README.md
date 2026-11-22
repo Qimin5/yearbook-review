@@ -1,60 +1,52 @@
 # Yearbook Review
 
-A single-team photo and bio review workspace, inspired by my experience with the Snapshots yearbook club.
+A photo and bio review app for one team, inspired by my experience with the Snapshots yearbook club.
 
-**Live app:** https://yearbook-review.app.space
+[Open the app](https://yearbook-review.app.space) · [GitHub repository](https://github.com/Qimin5/yearbook-review)
 
-**Repository:** https://github.com/Qimin5/yearbook-review
+## How it works
 
-## Try the workflow
+1. **Contribute:** Sign in, upload a JPEG or PNG up to 5 MB, and write a short bio or caption.
+2. **Optional AI help:** Click **Suggest a polish**, then choose whether to use the suggestion. You can still submit your original text if AI fails.
+3. **Submit:** Your entry appears as **Pending review**.
+4. **Review:** An editor approves the entry or requests changes. Requesting changes requires written feedback.
+5. **See updates live:** The contributor sees the result without refreshing and can edit and resubmit a returned entry.
 
-1. Open the workspace and sign in with DeepSpace. New users are contributors; the app owner is an editor.
-2. Upload a publicly shareable JPEG/PNG, up to 5 MB, and write a short bio/caption (1–500 characters).
-3. Click a submission photo to view it in full without cropping; the original file is unchanged. Optionally click **Suggest a polish**. Review the suggestion, choose **Use suggestion** or **Keep original**, and edit as needed. AI receives only the source text.
-4. Click **Submit for review**. The new entry appears as **Pending review**.
-5. In another account/browser session, an editor sees the review queue. **Approve**, or enter feedback and choose **Request changes**.
-6. Keep the contributor page open: status and feedback update without refreshing. A contributor can revise their own returned entry and resubmit it.
-7. Editors can open **Settings** after a teammate has signed in and grant/revoke editor access. The app owner stays an editor. Never share an owner's CLI token with a reviewer.
+Click any submission photo to see the full image. The original file is unchanged.
 
-For a two-person demonstration, use the owner account as editor and another account in an incognito window as contributor. A reviewer signing in independently initially has contributor access; the owner must explicitly grant editor access in Settings.
+## Try it with two accounts
 
-## DeepSpace features
+Use the app owner's account as the editor and a different account in an incognito window as the contributor. Keep both pages open to see live updates.
 
-- **Authentication:** SDK auth provider, sign-in overlay, verified caller JWTs and per-app roles.
-- **File storage:** `useR2Files({ scope: 'app' })` uploads to platform storage. Records store a key, not image bytes. The worker verifies stored bytes with `appFiles` before accepting a submission.
-- **Realtime records:** `useQuery<Submission>` subscribes to the `submissions` collection. Accepted server writes broadcast to authorized clients over WebSocket.
-- **Server actions and permissions:** submit, review and revise actions enforce application rules on the worker. Ordinary record writes are denied for every role, including editors, so direct SDK/tools writes cannot bypass review validation.
-- **AI:** an authenticated server action calls DeepSpace's `openai/chat-completion` integration with `gpt-4.1-mini`. No separate provider API key. The app owner pays platform usage; suggestions are optional and never automatically replace the source.
-- **Hosting:** original DeepSpace starter, SDK 0.44.2, deployed with `deepspace deploy` to `app.space`.
+New users start as contributors. To make another user an editor, have them sign in first, then grant editor access in **Settings** from the owner account.
 
-## Permission and validation decisions
+Contributors see only their own submission text. Editors see all submissions. The backend checks permissions, so hiding a button is not the only protection against unauthorized reviews.
 
-| Caller | Read submissions | Create / revise | Review |
-| --- | --- | --- | --- |
-| Signed out / viewer | No | No | No |
-| Contributor (`member`) | Own only | Through validated actions; revise own `needs_revision` entry only | No |
-| Editor (`admin`) | All team entries | Through validated actions | Through the review action only |
+## Built with DeepSpace
 
-Actions bypass record RBAC, so `src/actions/index.ts` explicitly resolves the caller's current membership/role on the server. It never trusts a role sent by the browser. Requesting changes requires nonblank feedback; approval clears obsolete feedback. The worker supplies the pending state, review author and timestamp. It checks caption length, app-scoped file key, actual JPEG/PNG signature and stored byte count. Creation uses a user-scoped request ID so retrying the same request does not create a second entry or overwrite a review.
+The app started from the DeepSpace starter and uses React and TypeScript with SDK version 0.44.2.
 
-**Important storage tradeoff:** app-scoped image URLs are public before and after approval. Submission text is restricted by record permissions, but images are not private. This demo uses fictional members and shareable sample images. Approval does **not** publish an About the Team website. A real yearbook intake system should add private, editor-authorized image delivery and consent controls.
-
-## Code map
-
-| File | Purpose |
+| Feature | DeepSpace use |
 | --- | --- |
-| `src/pages/(app)/home.tsx` | Upload/caption form, optional AI suggestion, live submission list and filters |
-| `src/components/SubmissionCard.tsx` | Review controls, feedback, status and revision entry point |
-| `src/actions/index.ts` | Server authorization, submit/review/revise validation |
-| `src/actions/polish.ts` | Text-only AI boundary and graceful failure |
-| `src/lib/actions.ts` | Same-origin action requests using the signed-in user's JWT |
-| `src/lib/submissions.ts` | Readable TypeScript status union and shared record type |
-| `src/schemas/submissions-schema.ts` | Columns, defaults, row read policy, direct-write denial |
-| `src/pages/(app)/(protected)/settings.tsx` | SDK-backed editor role management |
+| Sign-in | Authentication and app roles |
+| Photos | Platform file storage |
+| Submissions and feedback | Realtime records |
+| Review permissions | Server actions and collection permissions |
+| AI polishing | `openai/chat-completion` integration with `gpt-4.1-mini` |
+| Deployment | Hosting at `yearbook-review.app.space` |
+
+AI receives only the caption text. Suggestions are intended to preserve facts, but the contributor must check them before accepting. Calls go through DeepSpace; no separate OpenAI API key is configured.
+
+## Main choices and limits
+
+- **One team:** Keeps the first version small. An editor uses DeepSpace's admin role, which also allows role management.
+- **Public demo photos:** Image URLs are public, even before approval. Use only photos you can share publicly. Submission text has separate access restrictions.
+- **Server validation:** The backend checks photo type and size, caption length, ownership, and review permissions. Direct record writes are blocked so they cannot skip these checks.
+- **Review only:** Approval does not publish a public team page. Private photo access, invitations, unused-upload cleanup, AI usage limits, and publishing are future improvements. Anyone who can sign in can currently contribute.
 
 ## Run locally
 
-Prerequisites: Node 22.15+ (22.x), 24.x or 26.x, npm 11.6+, Git, and a DeepSpace login.
+Use Node 24, npm 11.6 or newer, Git, and a DeepSpace account. From the project folder:
 
 ```sh
 npm ci
@@ -63,7 +55,9 @@ npx deepspace auth whoami
 npx deepspace dev start
 ```
 
-Open the printed local URL. Do not start a second server on the same port. Save source changes for Vite hot updates; restart when changing worker/schema configuration. Keep `.dev.vars`, `.deepspace`, auth sessions and `node_modules` out of Git. This existing app already has its immutable ID in `wrangler.toml`; do not generate a new ID when continuing it.
+Open the local URL printed in the terminal. Keep passwords, tokens, and `.dev.vars` out of Git.
+
+To check and deploy changes:
 
 ```sh
 npm run validate
@@ -71,32 +65,18 @@ npm run build
 npx deepspace deploy
 ```
 
-The app uses GitHub source. Commit/push the reviewed code as usual; deployment ships the local checkout. Do not use `deepspace push` for this GitHub-owned app. Local records and deployed records are separate; platform file storage is shared for the same app identity.
+Commit and push reviewed changes to GitHub before deploying. Deployment uses the local checkout.
 
-## Verification
+## What was tested
 
-See [docs/VERIFICATION.md](docs/VERIFICATION.md) for the evidence and limitations, and [docs/LEARNING.md](docs/LEARNING.md) for a short bilingual walkthrough.
+I personally checked sign-in, text input, file-size rejection, photo upload and loading, and saved submissions after refresh. During final testing I tried AI suggestions and a logo submission, reported the photo display issue, and tested the updated app.
 
-- `npm run validate`: TypeScript and unit tests, including AI refusal/network fallback.
-- `npm run build`: production frontend/worker build and generated static landing.
-- `npm run test:workflow`: real HTTP + WebSocket workflow test. Requires the isolated preview and three locally provisioned test accounts.
-- `npm run test:browser-workflow`: optional Playwright UI workflow. Requires a usable Chromium installation and the same account names; browser startup was blocked in the Codex execution sandbox, so this suite is **not** claimed as passed.
+Codex ran the TypeScript check, **7 unit tests**, the production build, and **14 real-service workflow checks**, including two-account live updates and rejected unauthorized requests. These are agent-run checks. The separate Playwright browser suite could not start in the sandbox and is not counted as passed.
 
-For the real-service workflow test, create accounts using password stdin (credentials stay in the local DeepSpace registry), with names **Yearbook Editor**, **Yearbook Contributor**, and **Yearbook Outsider**. Then build and start the isolated test preview:
+See the [detailed verification record](docs/VERIFICATION.md) and [simple Chinese/English code walkthrough](docs/LEARNING.md).
 
-```sh
-npm run build
-node tests/serve-review.mjs
-# In another terminal:
-npm run test:workflow
-```
+## My work and Codex's help
 
-The preview makes only the local test account the owner; `testState()` isolates its record database. Uploaded fixtures still use the app's platform storage. The test removes its invalid/oversized fixtures, retains the valid photo referenced by its test entry, and never deletes existing user uploads. Optional `QA_PORT`/`QA_ORIGIN` choose another test port. Do not put test passwords in README or source.
+I chose the idea and workflow, ran the initial setup and deployment, connected the submission schema, edited the form and English labels, and performed the manual checks above. Codex provided example code, explanations, and debugging help.
 
-## Scope and next steps
-
-This version serves one team and shows at most 100 visible entries. Editor maps to DeepSpace `admin`, which includes role management; a larger product should separate reviewer and team-administrator powers. There is no team invitation/allowlist: people who can sign in can contribute, and only editors can see all text. Uploaded but abandoned photos can remain in storage; automated orphan cleanup, durable AI usage limits, private media, moderation/audit history and an approved-content publishing page are next steps. AI is instructed to preserve facts but cannot guarantee that; contributors must review suggestions.
-
-## Authorship and assistance
-
-I chose the Snapshots-inspired workflow. During the guided phase I ran setup/login/deploy/Git commands, changed the landing title, created and connected the submission schema, edited the caption/photo form, changed its label to English, and personally checked login, typing, file-size rejection, photo upload/readback, and persistence after refresh. Codex supplied example code, explanations and debugging guidance. Near the deadline I delegated the remaining implementation and verification to Codex: server-enforced review/revision, realtime workflow checks, optional AI polishing, interface cleanup, automated tests and documentation. Those automated checks are agent-run. During my final manual testing I also applied an AI suggestion, submitted a logo entry, and reported a cropped-image display problem, which Codex corrected. I have not yet personally completed the final cross-account permission tests.
+Near the deadline, I delegated the remaining implementation to Codex: backend review permissions, revisions, realtime workflow verification, AI polishing, interface improvements, automated tests, and documentation. The cross-account permission checks reported here were run by Codex.
