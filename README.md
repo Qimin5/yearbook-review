@@ -73,7 +73,7 @@ I personally checked sign-in, text input, file-size rejection, photo upload and 
 
 Codex ran the TypeScript check, **7 unit tests**, the production build, and **14 real-service workflow checks**, including two-account live updates and rejected unauthorized requests. These are agent-run checks. The separate Playwright browser suite could not start in the sandbox and is not counted as passed.
 
-See the [detailed verification record](docs/VERIFICATION.md) and [simple Chinese/English code walkthrough](docs/LEARNING.md).
+See the [detailed verification record](docs/VERIFICATION.md) for test results and remaining limitations.
 
 ## My work and Codex's help
 
