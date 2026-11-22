@@ -69,7 +69,7 @@ Commit and push reviewed changes to GitHub before deploying. Deployment uses the
 
 ## What was tested
 
-I personally checked sign-in, text input, file-size rejection, photo upload and loading, and saved submissions after refresh. During final testing I tried AI suggestions and a logo submission, reported the photo display issue, and tested the updated app.
+I personally checked sign-in, text input, file-size rejection, photo upload and loading, and saved submissions after refresh. During final testing I tried AI suggestions and a logo submission, reported the photo display issue, and tested the updated app. I also followed the two-account test instructions with separate editor and contributor accounts and confirmed that review updates appeared on the other account without refreshing.
 
 Codex ran the TypeScript check, **7 unit tests**, the production build, and **14 real-service workflow checks**, including two-account live updates and rejected unauthorized requests. These are agent-run checks. The separate Playwright browser suite could not start in the sandbox and is not counted as passed.
 
